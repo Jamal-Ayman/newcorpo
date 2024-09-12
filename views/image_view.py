@@ -16,6 +16,22 @@ image = Blueprint('image', __name__)
 def check_allowed_image(filename):
     return '.' in filename and filename.split('.')[1].lower() in ["png"]
 
+def get_image_path(authenticted_user_id, image_id):
+    image_object = Image.query.filter_by(id=image_id, user_id=authenticted_user_id).first()
+    if not image_object:
+        return False, f"image object not found {image_id}"
+    return True, os.path.join(Config.IMAGE_UPLOAD_FOLDER, image_object.image)
+
+def check_crop_validity(width, height, image_box):
+    valid = True
+    left, upper, right, lower = image_box
+    if right > width or lower > height:
+        valid = False    
+    if right <= left or lower <= upper:
+        valid = False
+    return valid    
+    
+
 @image.route('/upload_image', methods=['POST'])
 @jwt_required()
 def upload_images():
@@ -45,12 +61,12 @@ def upload_images():
 @jwt_required()
 def generate_histogram(id):
     authenticted_user_id = get_jwt_identity()
-    image_object = Image.query.filter_by(id=id, user_id=authenticted_user_id).first()
-    file_path = os.path.join(Config.IMAGE_UPLOAD_FOLDER, image_object.image)
-    print(file_path)
+    status, file_path = get_image_path(authenticted_user_id=authenticted_user_id, image_id=id)
+    if not status:
+        return jsonify({'message': file_path}), 404
     
-    if not os.path.exists(file_path):
-        return jsonify({'error': 'File not found'}), 404
+    if not file_path:
+        return jsonify({'message': 'File not found'}), 404
 
     # Open the image and split the channels
     image = cv2.imread(file_path)
@@ -74,3 +90,133 @@ def generate_histogram(id):
     img.seek(0)
     
     return send_file(img, mimetype='image/png')
+
+@image.route('/image/<id>/segmentation', methods=['GET'])
+@jwt_required()
+def generate_segmentation(id):
+    from PIL import Image
+    authenticted_user_id = get_jwt_identity()
+    status, file_path = get_image_path(authenticted_user_id=authenticted_user_id, image_id=id)
+    if not status:
+        return jsonify({'message': file_path}), 404
+    
+    if not file_path:
+        return jsonify({'message': 'File not found'}), 404
+
+    # Open the image
+    image = cv2.imread(file_path)
+
+    # Convert the image to grayscale
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Apply a simple threshold to segment the image
+    _, mask = cv2.threshold(gray_image, 128, 255, cv2.THRESH_BINARY)
+
+    # Save the mask
+    mask_image = Image.fromarray(mask)
+    img_io = BytesIO()
+    mask_image.save(img_io, 'PNG')
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/png')
+
+@image.route('/image/<id>/resize', methods=['POST'])
+@jwt_required()
+def resize_image(id):
+    from PIL import Image
+    authenticted_user_id = get_jwt_identity()
+    status, file_path = get_image_path(authenticted_user_id=authenticted_user_id, image_id=id)
+    if not status:
+        return jsonify({'message': file_path}), 404
+
+    if not file_path:
+        return jsonify({'message': 'File not found'}), 404
+
+    # Get the new width and height from the request
+    width = request.json.get('width')
+    height = request.json.get('height')
+
+    if not width or not height:
+        return jsonify({'messge': 'Please provide both width and height'}), 400
+
+    # Open and resize the image
+    image = Image.open(file_path)
+    resized_image = image.resize((width, height))
+
+    # Save the resized image
+    img_io = BytesIO()
+    resized_image.save(img_io, 'PNG')
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/png')
+
+@image.route('/image/<id>/crop', methods=['POST'])
+@jwt_required()
+def crop_image(id):
+    from PIL import Image
+    authenticted_user_id = get_jwt_identity()
+    status, file_path = get_image_path(authenticted_user_id=authenticted_user_id, image_id=id)
+    if not status:
+        return jsonify({'message': file_path}), 404
+
+    if not file_path:
+        return jsonify({'message': 'File not found'}), 404
+
+    # Get the crop box from the request (left, upper, right, lower)
+    box = request.json.get('box')
+
+    if not box or len(box) != 4:
+        return jsonify({'error': 'Please provide a valid crop box [left, upper, right, lower]'}), 400
+
+    # Open and crop the image
+    image = Image.open(file_path)
+    width, height = image.size
+    valid = check_crop_validity(
+        width=width, 
+        height=height, 
+        image_box=box
+        )
+    if not valid:
+       return jsonify({'messag': f'Please provide a valid crop box w{width}, h{height}'}), 400 
+    try:
+        cropped_image = image.crop(box)
+    except Exception as e:
+        return jsonify({'messag': 'Please provide a valid crop box [left, upper, right, lower]'}), 400    
+
+    # Save the cropped image
+    img_io = BytesIO()
+    cropped_image.save(img_io, 'PNG')
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/png')
+
+@image.route('/image/<id>/convert', methods=['POST'])
+@jwt_required()
+def convert_image(id):
+    from PIL import Image
+    authenticted_user_id = get_jwt_identity()
+    status, file_path = get_image_path(authenticted_user_id=authenticted_user_id, image_id=id)
+    if not status:
+        return jsonify({'message': file_path}), 404
+
+    if not file_path:
+        return jsonify({'message': 'File not found'}), 404
+
+    # Get the desired format from the request (e.g., 'png', 'jpg')
+    new_format = request.json.get('format')
+
+    if not new_format or new_format.lower() not in ['png', 'jpeg']:
+        return jsonify({'message': 'Please provide a valid format (png, jpg, jpeg)'}), 400
+
+    image = Image.open(file_path)
+        
+    if image.mode == 'P' and new_format.lower() in ['jpg', 'jpeg']:
+        image = image.convert('RGB')
+    
+    # Open and convert the image
+
+    img_io = BytesIO()
+    image.save(img_io, new_format.upper())
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype=f'image/{new_format.lower()}')
