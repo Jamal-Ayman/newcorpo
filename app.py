@@ -4,12 +4,14 @@ from config import Config
 from flask_migrate import Migrate
 from flask_login import LoginManager
 from flask_jwt_extended import JWTManager
+from flask_cors import CORS
 
 app = Flask(__name__)
 app.config.from_object(Config)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 jwt = JWTManager(app)
+CORS(app)
 
 # Register Models
 from models.users import User
@@ -34,6 +36,8 @@ from views.corpo_api import corpo as corpo_blueprint
 app.register_blueprint(corpo_blueprint)
 from views.image_view import image as image_blueprint
 app.register_blueprint(image_blueprint)
+from views.text_handler_view import text as text_blueprint
+app.register_blueprint(text_blueprint)
 
 
 @app.route('/')

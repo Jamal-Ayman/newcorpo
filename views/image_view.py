@@ -2,8 +2,7 @@ from models.users import User
 from models.image_upload import Image
 from app import db
 import cv2
-import os, json
-import pandas as pd
+import os
 from flask import request, Blueprint, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename

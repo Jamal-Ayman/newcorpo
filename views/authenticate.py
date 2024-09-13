@@ -3,26 +3,43 @@ from app import db
 from flask import request, flash, redirect, url_for, render_template, Blueprint, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+import re
 
 
 
 auth = Blueprint('auth', __name__)
 
-@auth.route('/signup', methods=['POST', 'GET'])
+def check_users(username, email, password):
+    if not email or not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        return False, "Invalid email address"
+
+    if not password or len(password) < 6:
+        return False, "Password must be at least 6 characters"
+
+    if not username or len(username) < 3:
+        return False, "Username must be at least 3 characters"
+    user = User.query.filter((User.email == email) | (User.username == username)).first()
+    if user:
+        return False, "User already exists"
+    return True, "valid"
+
+
+@auth.route('/signup', methods=['POST'])
 def signup():
-    if request.method == 'GET':
-        return render_template('signup.html')
-    
-    username = request.form["username"]
-    password = request.form["password"]
-    email = request.form["email"]
-    
+    try:
+        username = request.json["username"]
+        password = request.json["password"]
+        email = request.json["email"]
+    except:
+        return jsonify({"message":"invalid request body"}), 400    
+    valid, message = check_users(username=username, email=email, password=password)
+    if not valid:
+        return jsonify({"message":message}), 400
     user = User(username=username, email=email)
     user.set_password(password=password)
     db.session.add(user)
     db.session.commit()
-    flash('Account Created, you can log in.', 'success')
-    return redirect(url_for('auth.login'))
+    return jsonify({"message":"Account Created, you can log in."}), 200
 
 @auth.route('/login', methods=['POST', 'GET'])
 def login():
@@ -36,7 +53,7 @@ def login():
         access_token = create_access_token(identity=user.id)
         return jsonify(access_token=access_token, user=user.user_dict()), 200
     # flash('Login failed. Check your email and password.', 'danger')
-    return jsonify({"msg": "Invalid username or password"}), 401
+    return jsonify({"message": "Invalid username or password"}), 401
 
 @auth.route('/logout')
 @login_required
