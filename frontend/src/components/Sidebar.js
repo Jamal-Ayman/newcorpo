@@ -1,39 +1,24 @@
 import React from 'react';
-import { List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import InsertPhotoIcon from '@mui/icons-material/InsertPhoto';
-import UploadIcon from '@mui/icons-material/Upload';
-import AssessmentIcon from '@mui/icons-material/Assessment';
+import { List, ListItem, ListItemIcon, ListItemText } from '@mui/material';
+import DatasetIcon from '@mui/icons-material/Storage';
 import { Link } from 'react-router-dom';
 
 const Sidebar = () => {
   return (
-    <div style={{ width: 240, backgroundColor: '#2a3f54', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
-      <List component="nav" style={{ paddingTop: '64px' }}>  {/* Adjust for navbar height */}
-        <Divider />
-        <ListItem button component={Link} to="/dashboard/statistics">
+    <div style={{ width: 240, backgroundColor: '#ffffff', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
+      <List component="nav" style={{ paddingTop: '64px' }}>
+        <ListItem button component={Link} to="/dashboard/datasets">
           <ListItemIcon>
-            <BarChartIcon style={{ color: 'white' }} />
+            <DatasetIcon style={{ color: '#ffffff' }} />
           </ListItemIcon>
-          <ListItemText primary="Statistics" style={{ color: 'white' }} />
+          <ListItemText primary="Datasets" style={{ color: '#ffffff' }} />
         </ListItem>
-        <ListItem button component={Link} to="/dashboard/graph">
-          <ListItemIcon>
-            <AssessmentIcon style={{ color: 'white' }} />
-          </ListItemIcon>
-          <ListItemText primary="Graph" style={{ color: 'white' }} />
-        </ListItem>
+        {/* Other sidebar items */}
         <ListItem button component={Link} to="/dashboard/images">
           <ListItemIcon>
-            <InsertPhotoIcon style={{ color: 'white' }} />
+            <DatasetIcon style={{ color: '#ffffff' }} />
           </ListItemIcon>
-          <ListItemText primary="Image Manipulation" style={{ color: 'white' }} />
-        </ListItem>
-        <ListItem button component={Link} to="/dashboard/uploads">
-          <ListItemIcon>
-            <UploadIcon style={{ color: 'white' }} />
-          </ListItemIcon>
-          <ListItemText primary="Uploads" style={{ color: 'white' }} />
+          <ListItemText primary="Images" style={{ color: '#ffffff' }} />
         </ListItem>
       </List>
     </div>

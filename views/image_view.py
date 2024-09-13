@@ -3,7 +3,7 @@ from models.image_upload import Image
 from app import db
 import cv2
 import os
-from flask import request, Blueprint, jsonify, send_file
+from flask import request, Blueprint, jsonify, send_file, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from config import Config
@@ -38,13 +38,13 @@ def upload_images():
     user = User.query.filter_by(id=authenticted_user_id).first()
     if not user:
         return jsonify({"message":"authentication failure", "success": False}), 400
-    if 'files[]' not in request.files:
-        return jsonify({'error': 'No files part in the request'}), 400
+    if 'file' not in request.files:
+        return jsonify({'message': 'No files part in the request'}), 400
 
-    files = request.files.getlist('files[]')
+    files = request.files.get('file')
     uploaded_files = []
 
-    for file in files:
+    for file in [files]:
         if file and check_allowed_image(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join('./upload/images', filename)
@@ -219,3 +219,33 @@ def convert_image(id):
     img_io.seek(0)
 
     return send_file(img_io, mimetype=f'image/{new_format.lower()}')
+
+@image.route('/images', methods=['GET'])
+@jwt_required()
+def get_all_datasets():
+    authenticated_user = get_jwt_identity()
+    datasets = Image.query.filter_by(user_id=authenticated_user)
+    return jsonify([{'id': dataset.id, 'imagename': dataset.image, 'url': get_image_path(authenticted_user_id=authenticated_user, image_id=dataset.id)[1]} for dataset in datasets]), 200
+
+@image.route('/image/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_dataset(id):
+    authenticated_user = get_jwt_identity()
+    dataset = Image.query.filter_by(id=id, user_id=authenticated_user).first()
+    if not dataset:
+       return jsonify({"message":"not found"}), 404
+    db.session.delete(dataset)
+    db.session.commit()
+    return jsonify({'message': 'Dataset deleted'}), 200
+
+@image.route('/image/<int:id>', methods=['GET'])
+@jwt_required()
+def get_image_paths(id):
+    authenticated_user = get_jwt_identity()
+    status, file_path = get_image_path(authenticted_user_id=authenticated_user, image_id=id)
+    if not status:
+        return jsonify({'message': file_path}), 404
+
+    if not file_path:
+        return jsonify({'message': 'File not found'}), 404 
+    return jsonify({'url': file_path}), 200 
