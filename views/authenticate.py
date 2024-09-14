@@ -66,3 +66,27 @@ def logout():
 def dashboard():
     return render_template('dashboard.html', username=current_user.username)
             
+
+@auth.route('/account-info')
+@jwt_required()
+def get_account_info():
+    user = get_jwt_identity()
+    user_object = User.query.filter_by(id=user).first()
+    user_dict = {
+        "username": user_object.username,
+        "email": user_object.email
+    }
+    return jsonify(user_dict), 200
+
+@auth.route('/update-account-info', methods=["POST"])
+@jwt_required()
+def update_account_info():
+    user = get_jwt_identity()
+    user_object = User.query.filter_by(id=user).first()
+    username = request.json["username"]
+    email = request.json["email"]
+    password = request.json['password']
+    if user_object and user_object.check_password(password=password):
+        user = User(username=username, email=email) 
+        return jsonify({"message": "account updated"}), 200
+    return jsonify({"message": "invalid body"}), 400            

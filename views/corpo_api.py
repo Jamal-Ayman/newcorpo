@@ -131,3 +131,11 @@ def get_all_users():
     users_list = [{"id": user.id, "username": user.username, "email": user.email} for user in users]
     return jsonify({"users": users_list}), 200
 
+@corpo.route('/datasets_count')
+@jwt_required()
+def datasets_count():
+    user = get_jwt_identity()
+    datasets_list = list(TabularData.query.filter_by(user_id=user))
+    return jsonify({"datasets_count": len(datasets_list)}), 200
+
+

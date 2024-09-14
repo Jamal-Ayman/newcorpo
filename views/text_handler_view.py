@@ -1,17 +1,18 @@
 from flask import request, jsonify, Blueprint, send_file
-import numpy as np
 from flask_jwt_extended import jwt_required
 from textblob import TextBlob
-import matplotlib.pyplot as plt
 import spacy
 from sklearn.manifold import TSNE
-from io import BytesIO
+from sklearn.feature_extraction.text import TfidfVectorizer
+import matplotlib.pyplot as plt
+import io
+import re
 
 text = Blueprint('text', '__name__')
 
 
 # Creating the most essential sentences from the original text rather than generating new ones.
-# EN
+# ENflask 
 def extractive_summarization(text):
     nlp_en = spacy.load("en_core_web_lg")
     nlp_en.add_pipe("textrank", last=True)
@@ -39,6 +40,8 @@ def text_summerize():
 @text.route('/extract_keywords', methods=["POST"])
 @jwt_required()
 def extract_keywords():
+    nlp_en = spacy.load("en_core_web_lg")
+    nlp_en.add_pipe("textrank", last=True)
     data = request.json
     text = data.get('text')
 
@@ -61,37 +64,99 @@ def sentiment_analysis():
 
     blob = TextBlob(text)
     sentiment = blob.sentiment
-
     return jsonify({
         'polarity': sentiment.polarity,  
         'subjectivity': sentiment.subjectivity  
     })
 
-# @text.route('/tsne', methods=["POST"])
-# @jwt_required()
-# def tsne_visualization():
-#     nlp_en = spacy.load("en_core_web_lg")
-#     nlp_en.add_pipe("textrank", last=True)
-#     texts = request.json.get('texts')
+@text.route('/tsne', methods=["POST"])
+@jwt_required()
+def generate_tsne():
+    data = request.json.get('texts', [])
+    
+    if not data or len(data) < 2:
+        return jsonify({"error": "Please provide at least two text inputs"}), 400
+    
+    # Convert the text data to vectors using TF-IDF
+    vectorizer = TfidfVectorizer()
+    X = vectorizer.fit_transform(data).toarray()
+    
+    # Adjust perplexity to be less than the number of samples
+    perplexity_value = min(30, len(data) - 1)  # 30 is a common default value
 
-#     if not texts or len(texts) < 2:
-#         return jsonify({'message': 'At least two texts are required'}), 400
+    # Apply T-SNE
+    tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity_value)
+    X_embedded = tsne.fit_transform(X)
+    
+    # Plot the T-SNE
+    plt.figure(figsize=(8, 6))
+    plt.scatter(X_embedded[:, 0], X_embedded[:, 1])
+    
+    # Annotate the points with text
+    for i, text in enumerate(data):
+        plt.annotate(f"Text {i+1}", (X_embedded[i, 0], X_embedded[i, 1]))
 
-#     # Convert each text into a vector using spaCy's built-in vectors
-#     vectors = np.array([nlp_en(text).vector for text in texts])
+    # Save the plot to a PNG image in memory
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    img.seek(0)
+    plt.close()
+    
+    # Return the image as a file
+    return send_file(img, mimetype='image/png', as_attachment=True, download_name='tsne_visualization.png')
 
-#     tsne = TSNE(n_components=2, random_state=42)
-#     X_tsne = tsne.fit_transform(vectors)
+@text.route('/search', methods=["POST"])
+@jwt_required()
+def search_text():
+    text = request.json.get('text', '')
+    query = request.json.get('query', '')
 
-#     # Plot T-SNE
-#     plt.figure(figsize=(8, 6))
-#     plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=np.random.rand(len(texts)))
+    if not query or not text:
+        return jsonify({"error": "Text and search query are required"}), 400
 
-#     for i, text in enumerate(texts):
-#         plt.annotate(f"Text {i+1}", (X_tsne[i, 0], X_tsne[i, 1]))
+    # Search for the query in the provided text
+    results = []
+    if re.search(query, text, re.IGNORECASE):
+        results.append(text)
 
-#     img = BytesIO()
-#     plt.savefig(img, format='png')
-#     img.seek(0)
+    return jsonify({"results": results}), 200
 
-#     return send_file(img, mimetype='image/png')
+@text.route('/categorize', methods=["POST"])
+@jwt_required()
+def categorize_text():
+    categories = {
+        "Technology": ["AI", "machine learning", "technology", "software"],
+        "Science": ["biology", "chemistry", "physics", "science"],
+        "Literature": ["poetry", "novel", "literature", "fiction"]
+    }
+    
+    text = request.json.get('text', '')
+    if not text:
+        return jsonify({"error": "Text is required"}), 400
+
+    # Simple keyword-based categorization
+    assigned_categories = []
+    for category, keywords in categories.items():
+        if any(keyword.lower() in text.lower() for keyword in keywords):
+            assigned_categories.append(category)
+    
+    return jsonify({"categories": assigned_categories}), 200
+
+@text.route('/custom_query', methods=["POST"])
+@jwt_required()
+def custom_query():
+    text = request.json.get('text', '')
+    keyword = request.json.get('keyword', '')
+    min_length = request.json.get('min_length', 0)
+    
+    if not text or not keyword:
+        return jsonify({"error": "Text and keyword are required"}), 400
+    
+    # Check if keyword is in text and text length meets the condition
+    keyword_in_text = keyword.lower() in text.lower()
+    meets_length_condition = len(text) >= int(min_length)
+
+    return jsonify({
+        "keyword_in_text": keyword_in_text,
+        "meets_length_condition": meets_length_condition
+    }), 200

@@ -1,92 +1,163 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Card, CardContent, Grid, Button, CircularProgress, Collapse, Alert, Slider } from '@mui/material';
+import { Container, Typography, Card, CardContent, Grid, Button, CircularProgress, Alert, Slider, IconButton, TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import { Crop, ExpandMore, Delete } from '@mui/icons-material';
+import SearchIcon from '@mui/icons-material/Search';
+import { Cropper } from 'react-cropper';
+import 'cropperjs/dist/cropper.css';
 import api from '../utils/api'; // Axios setup for API calls
-import { motion } from 'framer-motion'; // For animations
+import { useNavigate } from 'react-router-dom'; // To handle navigation
+import { motion } from 'framer-motion'; // Import motion from framer-motion
 
 const ImagePage = () => {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [expandedImage, setExpandedImage] = useState(null); // Track which image is expanded
-  const [histogramImage, setHistogramImage] = useState({}); // Store histogram images
-  const [segmentedImage, setSegmentedImage] = useState({}); // Store segmented images
-  const [resizedImage, setResizedImage] = useState(null); // Store the resized image URL
-  const [resizeValue, setResizeValue] = useState(100); // Default resize to 100%
+  const [expandedImage, setExpandedImage] = useState(null);
+  const [resizeValue, setResizeValue] = useState({}); // Default resize values for each image
+  const [maxResizeValue, setMaxResizeValue] = useState({}); // Store max resize value for each image
+  const [minResizeValue, setMinResizeValue] = useState({}); // Store min resize value for each image
+  const [resizedImages, setResizedImages] = useState({}); // Store the resized images
+  const [cropper, setCropper] = useState(null); // Reference to cropper instance
+  const [croppedImages, setCroppedImages] = useState({});
+  const [histogramImages, setHistogramImages] = useState({});
+  const [segmentationImages, setSegmentationImages] = useState({});
+  const [convertedImages, setConvertedImages] = useState({});
+  const [format, setFormat] = useState('jpg'); // Default format for conversion
+  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate(); // Hook to navigate between routes
 
   // Fetch images on mount
   useEffect(() => {
-    const fetchImages = async () => {
-      try {
-        const response = await api.get('/images'); // Assuming /images returns a list of images with URLs
-        setImages(response.data);
-        setLoading(false);
-      } catch (err) {
-        setError('Failed to fetch images');
-        setLoading(false);
-      }
-    };
-
     fetchImages();
   }, []);
 
-  // Fetch histogram for an image
-  const fetchHistogram = async (id) => {
+  const fetchImages = async () => {
     try {
-      const response = await api.get(`/image/${id}/histogram`, {
-        responseType: 'blob', // Important for receiving images
-      });
-      const imageURL = URL.createObjectURL(response.data); // Create a URL for the image
-      setHistogramImage((prevImages) => ({
-        ...prevImages,
-        [id]: imageURL, // Store the image URL in state
+      const response = await api.get('/images');
+      setImages(response.data);
+      setLoading(false);
+    } catch (err) {
+      setError('Failed to fetch images');
+      setLoading(false);
+    }
+  };
+
+  // Handle crop button click
+  const handleCrop = (id) => {
+    if (cropper) {
+      setCroppedImages((prev) => ({
+        ...prev,
+        [id]: cropper.getCroppedCanvas().toDataURL('image/jpeg')
       }));
-      setExpandedImage(id); // Expand this image for details
-    } catch (err) {
-      console.error('Failed to fetch histogram image', err);
     }
   };
 
-  // Fetch segmentation for an image
-  const fetchSegmentation = async (id) => {
-    try {
-      const response = await api.get(`/image/${id}/segmentation`, {
-        responseType: 'blob', // Important for receiving images
-      });
-      const imageURL = URL.createObjectURL(response.data); // Create a URL for the image
-      setSegmentedImage((prevImages) => ({
-        ...prevImages,
-        [id]: imageURL, // Store the image URL in state
-      }));
-      setExpandedImage(id); // Expand this image for details
-    } catch (err) {
-      console.error('Failed to fetch segmented image', err);
+  // Handle expand/collapse
+  const handleExpand = (id) => {
+    if (expandedImage === id) {
+      setExpandedImage(null); // Collapse if already expanded
+    } else {
+      setExpandedImage(id); // Expand the clicked image
     }
   };
 
-  // Delete an image
-  const deleteImage = async (id) => {
-    try {
-      await api.delete(`/image/${id}`);
-      setImages((prevImages) => prevImages.filter((image) => image.id !== id)); // Remove image from the list
-      alert('Image deleted successfully!');
-    } catch (err) {
-      alert('Failed to delete image');
-      console.error('Delete error:', err);
+  // Search images by ID or filename
+  const handleSearch = () => {
+    if (searchQuery) {
+      const filteredImages = images.filter((image) =>
+        image.id.toString().includes(searchQuery) ||
+        image.imagename.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setImages(filteredImages);
+    } else {
+      fetchImages(); // Reset search
     }
   };
 
-  // Handle resizing the image
-  const handleResize = (url) => {
+  // Calculate max and min resize based on image dimensions
+  const calculateResizeLimits = (img) => {
+    const maxResize = 200; // Max resize to 200% of the original size
+    const minResize = 50; // Min resize to 50% of the original size
+    return { maxResize, minResize };
+  };
+
+  // Handle resize live and set the resized image URL for download
+  const handleResizeLive = (url, id, resizePercentage) => {
     const img = new Image();
+    img.crossOrigin = 'Anonymous';
     img.src = url;
+
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      canvas.width = img.width * (resizeValue / 100);
-      canvas.height = img.height * (resizeValue / 100);
+
+      canvas.width = img.width * (resizePercentage / 100);
+      canvas.height = img.height * (resizePercentage / 100);
+
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      setResizedImage(canvas.toDataURL());
+
+      setResizedImages((prev) => ({
+        ...prev,
+        [id]: canvas.toDataURL('image/jpeg')
+      }));
     };
+
+    img.onerror = () => {
+      console.error('Failed to load image for resizing.');
+    };
+  };
+
+  // Handle fetching histogram
+  const handleHistogram = async (id) => {
+    try {
+      const response = await api.get(`/image/${id}/histogram`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      setHistogramImages((prev) => ({
+        ...prev,
+        [id]: url,
+      }));
+    } catch (err) {
+      console.error('Failed to fetch histogram', err);
+    }
+  };
+
+  // Handle fetching segmentation
+  const handleSegmentation = async (id) => {
+    try {
+      const response = await api.get(`/image/${id}/segmentation`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      setSegmentationImages((prev) => ({
+        ...prev,
+        [id]: url,
+      }));
+    } catch (err) {
+      console.error('Failed to fetch segmentation', err);
+    }
+  };
+
+  // Handle converting image format
+  const handleConvert = async (id) => {
+    try {
+      const response = await api.post(`/image/${id}/convert`, { format }, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      setConvertedImages((prev) => ({
+        ...prev,
+        [id]: url,
+      }));
+    } catch (err) {
+      console.error('Failed to convert image', err);
+    }
+  };
+
+  // Handle delete image
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`/image/${id}`);
+      // Update the UI after successful deletion
+      setImages((prev) => prev.filter((image) => image.id !== id));
+    } catch (err) {
+      console.error('Failed to delete image', err);
+    }
   };
 
   if (loading) return <CircularProgress />;
@@ -98,103 +169,214 @@ const ImagePage = () => {
         Your Images
       </Typography>
 
+      {/* Search Field */}
+      <TextField
+        label="Search by ID or Filename"
+        variant="outlined"
+        fullWidth
+        margin="normal"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton onClick={handleSearch}>
+                <SearchIcon />
+              </IconButton>
+            </InputAdornment>
+          )
+        }}
+      />
+
+      {/* Upload Button */}
+      <Button
+        variant="contained"
+        color="primary"
+        style={{ marginBottom: '20px' }}
+        onClick={() => {
+          navigate('/upload_image'); // Navigate to the image upload page
+        }}
+      >
+        Upload New Image
+      </Button>
+
       <Grid container spacing={2}>
         {images.map((image) => (
-          <Grid item xs={12} key={image.id} style={{ display: 'flex', justifyContent: 'center' }}>
+          <Grid item xs={12} sm={6} md={4} key={image.id} style={{ display: 'flex', justifyContent: 'center' }}>
             <Card sx={{ width: expandedImage === image.id ? '80%' : '100%', maxWidth: expandedImage === image.id ? 800 : 300 }}>
               <CardContent>
                 {/* Show image ID and filename */}
                 <Typography variant="h6">Image ID: {image.id}</Typography>
-                <Typography variant="subtitle1">{image.filename}</Typography>
+                <Typography variant="subtitle1">{image.imagename}</Typography>
 
-                {/* Display the image */}
-                {image.url && (
+                {/* Display the image using the URL */}
+                {image.imagename && (
                   <img
-                    src={image.url}
-                    alt={image.filename}
-                    style={{ width: '100%', height: 'auto', marginTop: '10px' }}
+                    src={`http://127.0.0.1:5000/uploads/images/${image.imagename}`} // Use the endpoint to get the image
+                    alt={image.imagename}
+                    style={{
+                      width: `${resizeValue[image.id] || 100}%`,
+                      height: 'auto',
+                      marginTop: '10px',
+                      borderRadius: 4,
+                      maxWidth: 'none', // Allow resize beyond container width
+                      maxHeight: 'none',
+                    }}
+                    ref={(img) => {
+                      // Calculate max and min resize values
+                      if (img && !maxResizeValue[image.id]) {
+                        const { maxResize, minResize } = calculateResizeLimits(img);
+                        setMaxResizeValue((prev) => ({
+                          ...prev,
+                          [image.id]: maxResize,
+                        }));
+                        setMinResizeValue((prev) => ({
+                          ...prev,
+                          [image.id]: minResize,
+                        }));
+                      }
+                    }}
                   />
                 )}
 
-                <div style={{ marginTop: '10px' }}>
-                  {/* Show Histogram Button */}
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={() => fetchHistogram(image.id)}
-                    sx={{ mr: 2 }}
-                  >
-                    Show Histogram
-                  </Button>
+                {/* Expand/Collapse Button */}
+                <IconButton
+                  onClick={() => handleExpand(image.id)}
+                  style={{ marginTop: '10px' }}
+                >
+                  <ExpandMore />
+                </IconButton>
 
-                  {/* Show Segmentation Button */}
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    onClick={() => fetchSegmentation(image.id)}
-                    sx={{ mr: 2 }}
-                  >
-                    Show Segmentation
-                  </Button>
+                {/* Delete Button */}
+                <IconButton
+                  onClick={() => handleDelete(image.id)}
+                  color="secondary"
+                  style={{ marginTop: '10px' }}
+                >
+                  <Delete />
+                </IconButton>
 
-                  {/* Delete Button */}
-                  <Button
-                    variant="contained"
-                    color="error"
-                    onClick={() => deleteImage(image.id)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-
-                {/* Resize Image */}
-                <div style={{ marginTop: '20px' }}>
-                  <Typography variant="subtitle1">Resize Image</Typography>
-                  <Slider
-                    value={resizeValue}
-                    onChange={(e, newValue) => setResizeValue(newValue)}
-                    aria-labelledby="resize-slider"
-                    min={10}
-                    max={200}
-                  />
-                  <Button variant="contained" color="primary" onClick={() => handleResize(image.url)}>
-                    Resize
-                  </Button>
-                  {resizedImage && (
-                    <div style={{ marginTop: '10px' }}>
-                      <img src={resizedImage} alt="Resized" style={{ maxWidth: '100%' }} />
-                      <a href={resizedImage} download={`resized_${image.filename}`} style={{ display: 'block', marginTop: '10px' }}>
-                        Download Resized Image
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                {/* Collapse to show histogram or segmented image */}
-                <Collapse in={expandedImage === image.id}>
+                {/* If the image is expanded, show additional options */}
+                {expandedImage === image.id && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
                     style={{ marginTop: '20px' }}
                   >
-                    {/* Show histogram if available */}
-                    {histogramImage[image.id] && (
-                      <div style={{ marginTop: '20px' }}>
-                        <Typography variant="h6">Image Histogram</Typography>
-                        <img src={histogramImage[image.id]} alt="Histogram" style={{ maxWidth: '100%' }} />
+                    {/* Resize Image */}
+                    <Typography variant="subtitle1">Resize Image</Typography>
+                    <Slider
+                      value={resizeValue[image.id] || 100}
+                      onChange={(e, newValue) => {
+                        setResizeValue({ ...resizeValue, [image.id]: newValue });
+                        handleResizeLive(`http://127.0.0.1:5000/uploads/images/${image.imagename}`, image.id, newValue);
+                      }}
+                      aria-labelledby="resize-slider"
+                      min={minResizeValue[image.id] || 50} // Use the calculated min resize
+                      max={maxResizeValue[image.id] || 200} // Use the calculated max resize
+                    />
+
+                    {/* Show the download link for resized image */}
+                    {resizedImages[image.id] && (
+                      <div style={{ marginTop: '10px' }}>
+                        <a href={resizedImages[image.id]} download={`resized_${image.imagename}`} style={{ display: 'block', marginTop: '10px' }}>
+                          Download Resized Image
+                        </a>
                       </div>
                     )}
-                    
-                    {/* Show segmented image if available */}
-                    {segmentedImage[image.id] && (
-                      <div style={{ marginTop: '20px' }}>
-                        <Typography variant="h6">Image Segmentation</Typography>
-                        <img src={segmentedImage[image.id]} alt="Segmented" style={{ maxWidth: '100%' }} />
+
+                    {/* Histogram Button */}
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      onClick={() => handleHistogram(image.id)}
+                      style={{ marginTop: '10px', marginRight: '10px' }}
+                    >
+                      Get Histogram
+                    </Button>
+                    {histogramImages[image.id] && (
+                      <div style={{ marginTop: '10px' }}>
+                        <img src={histogramImages[image.id]} alt="Histogram" style={{ maxWidth: '100%' }} />
+                        <a href={histogramImages[image.id]} download={`histogram_${image.imagename}`} style={{ display: 'block', marginTop: '10px' }}>
+                          Download Histogram
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Segmentation Button */}
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      onClick={() => handleSegmentation(image.id)}
+                      style={{ marginTop: '10px', marginRight: '10px' }}
+                    >
+                      Get Segmentation
+                    </Button>
+                    {segmentationImages[image.id] && (
+                      <div style={{ marginTop: '10px' }}>
+                        <img src={segmentationImages[image.id]} alt="Segmentation" style={{ maxWidth: '100%' }} />
+                        <a href={segmentationImages[image.id]} download={`segmentation_${image.imagename}`} style={{ display: 'block', marginTop: '10px' }}>
+                          Download Segmentation
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Convert Image Format */}
+                    <FormControl fullWidth style={{ marginTop: '10px' }}>
+                      <InputLabel>Format</InputLabel>
+                      <Select
+                        value={format}
+                        onChange={(e) => setFormat(e.target.value)}
+                      >
+                        <MenuItem value="jpg">JPG</MenuItem>
+                        <MenuItem value="png">PNG</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      onClick={() => handleConvert(image.id)}
+                      style={{ marginTop: '10px' }}
+                    >
+                      Convert Format
+                    </Button>
+                    {convertedImages[image.id] && (
+                      <div style={{ marginTop: '10px' }}>
+                        <a href={convertedImages[image.id]} download={`converted_${image.imagename}`} style={{ display: 'block', marginTop: '10px' }}>
+                          Download Converted Image
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Crop Image */}
+                    <Cropper
+                      src={`http://127.0.0.1:5000/uploads/images/${image.imagename}`}
+                      style={{ height: 200, width: '100%' }}
+                      aspectRatio={1}
+                      guides={false}
+                      viewMode={1}
+                      onInitialized={(instance) => setCropper(instance)}
+                    />
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      startIcon={<Crop />}
+                      onClick={() => handleCrop(image.id)}
+                      style={{ marginTop: '10px' }}
+                    >
+                      Crop
+                    </Button>
+                    {croppedImages[image.id] && (
+                      <div style={{ marginTop: '10px' }}>
+                        <img src={croppedImages[image.id]} alt="Cropped" style={{ maxWidth: '100%' }} />
+                        <a href={croppedImages[image.id]} download={`cropped_${image.imagename}`} style={{ display: 'block', marginTop: '10px' }}>
+                          Download Cropped Image
+                        </a>
                       </div>
                     )}
                   </motion.div>
-                </Collapse>
+                )}
               </CardContent>
             </Card>
           </Grid>

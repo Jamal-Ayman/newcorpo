@@ -20,7 +20,7 @@ const Navbar = ({ handleDrawerOpen }) => {
   };
 
   return (
-    <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, background: '#2a3f54' }}>
+    <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, background: '#1976d2' }}>
       <Toolbar>
         <Typography variant="h6" component={Link} to="/dashboard" style={{ flexGrow: 1, color: 'white', textDecoration: 'none' }}>
           Dashboard

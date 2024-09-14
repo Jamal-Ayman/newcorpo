@@ -3,7 +3,7 @@ from models.image_upload import Image
 from app import db
 import cv2
 import os
-from flask import request, Blueprint, jsonify, send_file, send_from_directory
+from flask import request, Blueprint, jsonify, send_file, send_from_directory, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from config import Config
@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 
 image = Blueprint('image', __name__)
+IMAGE_DIR = 'upload/images'
 
 def check_allowed_image(filename):
     return '.' in filename and filename.split('.')[1].lower() in ["png"]
@@ -225,7 +226,7 @@ def convert_image(id):
 def get_all_datasets():
     authenticated_user = get_jwt_identity()
     datasets = Image.query.filter_by(user_id=authenticated_user)
-    return jsonify([{'id': dataset.id, 'imagename': dataset.image, 'url': get_image_path(authenticted_user_id=authenticated_user, image_id=dataset.id)[1]} for dataset in datasets]), 200
+    return jsonify([{'id': dataset.id, 'imagename': dataset.image} for dataset in datasets]), 200
 
 @image.route('/image/<int:id>', methods=['DELETE'])
 @jwt_required()
@@ -249,3 +250,24 @@ def get_image_paths(id):
     if not file_path:
         return jsonify({'message': 'File not found'}), 404 
     return jsonify({'url': file_path}), 200 
+
+@image.route('/uploads/images/<filename>')
+def serve_image(filename):
+    # Securely join the directory and filename
+    image_path = os.path.join(IMAGE_DIR, filename)
+    
+    # Check if the image exists in the directory
+    if not os.path.exists(image_path) or not os.path.isfile(image_path):
+        abort(404)  # Return 404 if the file does not exist
+
+    # Send the file from the specified directory
+    return send_from_directory(IMAGE_DIR, filename)
+
+
+@image.route('/images_count')
+@jwt_required()
+def image_count():
+    user = get_jwt_identity()
+    datasets_list = list(Image.query.filter_by(user_id=user))
+    return jsonify({"image_count": len(datasets_list)}), 200
+
