@@ -15,7 +15,7 @@ const Footer = () => {
               Company
             </Typography>
             <Typography variant="body2">
-              © 2024 Your Company. All rights reserved.
+              © 2024 JStatistics. All rights reserved.
             </Typography>
           </Grid>
           <Grid item xs={12} sm={4}>

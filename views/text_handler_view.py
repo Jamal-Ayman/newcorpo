@@ -14,7 +14,7 @@ text = Blueprint('text', '__name__')
 # Creating the most essential sentences from the original text rather than generating new ones.
 # ENflask 
 def extractive_summarization(text):
-    nlp_en = spacy.load("en_core_web_lg")
+    nlp_en = spacy.load("en_core_web_sm")
     nlp_en.add_pipe("textrank", last=True)
     doc = nlp_en(text)
     # Summarize the text using textrank
@@ -40,7 +40,7 @@ def text_summerize():
 @text.route('/extract_keywords', methods=["POST"])
 @jwt_required()
 def extract_keywords():
-    nlp_en = spacy.load("en_core_web_lg")
+    nlp_en = spacy.load("en_core_web_sm")
     nlp_en.add_pipe("textrank", last=True)
     data = request.json
     text = data.get('text')

@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: backend
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/postgresdb
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend   # Ensure this is the path to the frontend directory
+      dockerfile: Dockerfile  # This is optional if your Dockerfile is named Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/app
+    stdin_open: true
+    tty: true
+
+  db:
+    image: postgres:13
+    container_name: postgresdb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgresdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
