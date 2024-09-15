@@ -16,15 +16,17 @@ services:
 
   frontend:
     build:
-      context: ./frontend   # Ensure this is the path to the frontend directory
-      dockerfile: Dockerfile  # This is optional if your Dockerfile is named Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: frontend
     ports:
-      - "3000:80"
+      - "3000:3000"
     volumes:
       - ./frontend:/app
     stdin_open: true
     tty: true
+    depends_on:
+      - backend
 
   db:
     image: postgres:13

@@ -11,7 +11,7 @@ app.config.from_object(Config)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 jwt = JWTManager(app)
-CORS(app)
+CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
 
 # Register Models
 from models.users import User

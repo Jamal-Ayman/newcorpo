@@ -87,6 +87,8 @@ def update_account_info():
     email = request.json["email"]
     password = request.json['password']
     if user_object and user_object.check_password(password=password):
-        user = User(username=username, email=email) 
+        user = User(username=username, email=email)
+        db.session.add(user)
+        db.session.commit() 
         return jsonify({"message": "account updated"}), 200
     return jsonify({"message": "invalid body"}), 400            

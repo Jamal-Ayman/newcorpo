@@ -7,15 +7,39 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import matplotlib.pyplot as plt
 import io
 import re
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.nlp.tokenizers import Tokenizer
+from sumy.summarizers.lex_rank import LexRankSummarizer
+from rake_nltk import Rake
+import nltk
+
+
 
 text = Blueprint('text', '__name__')
 
+def summarize_text(text):
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+        nltk.download('punkt_tab')
+    parser = PlaintextParser.from_string(text, Tokenizer("english"))
+    summarizer = LexRankSummarizer()
+    summary = summarizer(parser.document, 2)
+    return ' '.join([str(sentence) for sentence in summary])
+
+
+def extract_keywords_nltk(text):
+    rake = Rake()
+    rake.extract_keywords_from_text(text)
+    return rake.get_ranked_phrases()
 
 # Creating the most essential sentences from the original text rather than generating new ones.
 # ENflask 
 def extractive_summarization(text):
     nlp_en = spacy.load("en_core_web_sm")
     nlp_en.add_pipe("textrank", last=True)
+    # nlp_en.add_pipe("textrank", last=True)
     doc = nlp_en(text)
     # Summarize the text using textrank
     summary_sentences = []
@@ -30,7 +54,7 @@ def text_summerize():
     if not text:
         return jsonify({"message":"invalid request body"}), 400
     
-    summrized_text = extractive_summarization(text)
+    summrized_text = summarize_text(text)
     return jsonify({"message": summrized_text}), 200
 
 # Named Entity recognition (NER) 
@@ -40,16 +64,13 @@ def text_summerize():
 @text.route('/extract_keywords', methods=["POST"])
 @jwt_required()
 def extract_keywords():
-    nlp_en = spacy.load("en_core_web_sm")
-    nlp_en.add_pipe("textrank", last=True)
     data = request.json
     text = data.get('text')
 
     if not text:
         return jsonify({'error': 'Text not provided'}), 400
 
-    doc = nlp_en(text)
-    keywords = [ent.text for ent in doc.ents]  # Extract named entities
+    keywords = extract_keywords_nltk(text)
 
     return jsonify({'keywords': keywords})
 

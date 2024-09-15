@@ -1,26 +1,20 @@
-# Use the official Node.js image
-FROM node:16-alpine
+# Use an official Node.js runtime as a parent image
+FROM node:16
 
-# Set the working directory
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy the package.json and package-lock.json
 COPY package*.json ./
 
-# Install frontend dependencies
+# Install dependencies
 RUN npm install
 
-# Copy the rest of the frontend code
+# Copy the rest of the application
 COPY . .
 
-# Build the frontend application
-RUN npm run build
+# Expose the application on port 3000
+EXPOSE 3000
 
-# Use a simple HTTP server to serve the static files
-FROM nginx:alpine
-COPY --from=0 /app/build /usr/share/nginx/html
-
-# Expose port 80
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+# Start the application using npm start
+CMD ["npm", "start"]
